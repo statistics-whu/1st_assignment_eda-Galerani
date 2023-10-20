@@ -1,0 +1,217 @@
+---
+title: "第一次作业：武汉链家二手房简要分析"
+CJKmainfont: simsun.ttc
+author: "杨玉瑾"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  word_document:
+    toc: yes
+  html_document:
+    code_folding: show
+    fig_caption: yes
+    fig_width: 10
+    highlight: tango
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+---
+
+```{r setup, include = FALSE,echo = FALSE}
+knitr::opts_chunk$set(echo = FALSE,error = FALSE, warning = FALSE, message = FALSE, out.width = "100%", split = FALSE, fig.align = "center")
+#load library
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(plotly)
+library(patchwork)
+library(ggrepel)
+library(moments)
+library(showtext)
+showtext.auto(enable = TRUE)
+```
+
+# 你的主要发现
+
+1.  发现1 根据武汉市链家二手房3000套房源信息，可以初步发现，武汉市挂牌二手房房源单价均价主要集中在在14000-15000元居多，总价在140万-150万元居多，面积在100平居多，户型多为两室一厅或三室两厅，精装房源为主，板楼多，大多数近地铁。
+2.  发现2 房源地段、户型、楼层、交通便利程度均在不同程度上影响房源价格。
+3.  发现3 中北路、水果湖的房源价格最高，存在一些面积大、房间多的房源和面积小于20平的房源，差异化大。 
+
+# 数据介绍
+
+本报告**链家**数据获取方式如下：
+
+报告人在2023年9月12日获取了[链家武汉二手房网站](https://wh.lianjia.com/ershoufang/)数据。
+
+-   链家二手房网站默认显示100页，每页30套房产，因此本数据包括3000套房产信息；
+
+-   数据包括了页面可见部分的文本信息，具体字段及说明见作业说明。
+
+**说明：**数据仅用于教学；由于不清楚链家数据的展示规则，因此数据可能并不是武汉二手房市场的随机抽样，结论很可能有很大的偏差，甚至可能是错误的。
+
+```{r}
+# 载入数据和预处理
+lj<- read_csv("C:/Users/yangy/Documents/mem/2023-09-12_cleaned.csv")
+# EDA ---------------------------------------------------------------------
+
+## 如下语句可以解决画图中的中文显示问题，当然你可以用showtext包来解决
+
+theme_set(theme(text = element_text(family="simsun",size = 10))) #这里family设置成你系统中的中文字体名。
+
+# 做一些数据预处理，比如把字符型变成factor。
+sapply(lj,class)
+df <- as.data.frame(unclass(lj), stringsAsFactors = TRUE)
+sapply(df,class)
+```
+
+各变量的简短信息：
+
+```{r}
+glimpse(lj)
+```
+
+各变量的简短统计：
+
+```{r}
+summary(df)
+var(df$price_ttl)
+var(df$price_sqm)
+ggplot(df,aes(decoration))+geom_bar()
+ggplot(df,aes(property_height))+geom_bar()
+ggplot(df,aes(property_style))+geom_bar()
+ggplot(df,aes(near_subway))+geom_bar()
+ggplot(df,aes(has_key))+geom_bar()
+ggplot(df,aes(vr))+geom_bar()
+```
+
+可以看到：
+
+-   直观结论1 武汉市链家挂牌二手房房源每平方米价格平均数为15148元，中位数为14404元，最高值为44656元，最低值为1771元，极差为42885元，方差为39982547，数据波动大，离散程度较低，可能存在一些异常值。
+-   直观结论2 武汉市链家挂牌二手房房源总价平均数为155.9万，中位数为137万，最高值为1380万，最低值为10.6万，极差为1369.4万，离散程度较低，可能存在一些异常值。
+-   直观结论3 武汉市链家挂牌二手房房源面积平均数为100.87平，中位数为95.55平，最高值为588.66平，最低值为22.77平，极差为565.89平，可能存在一些异常值。
+-   直观结论4 武汉市链家挂牌二手房房源至少有1间卧室，大部分有2至3间卧室，最多有7间卧室；大部分有1至2间客厅，最多有4间客厅，最少的没有客厅。
+-   直观结论5 武汉市链家挂牌二手房房源以精装为主，标注精装的占58.57%（1757套），标注简装的占21.13%（634套）。房源楼层分布较为均匀，中楼层房源相对较多，40.6%的房源（1218套）位于中楼层，30.2%的房源（906套）位于高楼层，27.2%的房源（816套）位于低楼层。房源为板楼的居多，占59.37%（1781套），其次是板塔结合和塔楼，分别占20.5%（615套）、17.57%（527套）。约一半房源（51.8%，1554套）标注"近地铁"，交通便利；大部分房源（84.17%，2525套）可以"随时看房"，房屋中介有钥匙更方便带看；69.47%的房源（2084套）可以"VR看装修"，利于有意向的买家足不出户初步了解房屋状况。
+
+# 探索性分析
+
+## 每平方米价格的数值描述与图形
+
+```{r}
+skewness(df$price_sqm)
+kurtosis(df$price_sqm)
+ggplot(data = df)+ geom_boxplot(mapping = aes(x = price_sqm))
+ggplot(data = df)+ geom_histogram(mapping = aes(x = price_sqm))
+threshold01 <- median(df$price_sqm)+2*sd(df$price_sqm)
+threshold01
+```
+
+发现：
+
+-   发现1 每平方米价格主要集中在1万元至2万元之间，假设高于中位数2个标准差为异常值，则存在27050元以上的异常值。
+-   发现2 每平方米价格分布的尾部在右侧，具有比正态分布更尖锐的峰，不满足正态分布。
+
+## 房源总价的数值描述与图形
+
+```{r}
+skewness(df$price_ttl)
+kurtosis(df$price_ttl)
+ggplot(data = df)+ geom_boxplot(mapping = aes(x = price_ttl))
+ggplot(data = df)+ geom_histogram(mapping = aes(x = price_ttl))
+threshold02 <- median(df$price_ttl)+2*sd(df$price_ttl)
+threshold02
+```
+
+发现：
+
+-   发现1 房源总价主要集中在30万元至250万元之间，假设高于中位数2个标准差为异常值，则存在328万元以上的异常值。
+-   发现2 房源总价分布的尾部在右侧，具有比正态分布更尖锐的峰，不满足正态分布。
+
+## 房源面积的数值描述与图形
+
+```{r}
+skewness(df$building_area)
+kurtosis(df$building_area)
+ggplot(data = df)+ geom_boxplot(mapping = aes(x = building_area))
+ggplot(data = df)+ geom_histogram(mapping = aes(x = building_area))
+threshold03 <- median(df$building_area)+2*sd(df$building_area)
+threshold03
+```
+
+发现：
+
+-   发现1 房源面积主要集中在60平至150平之间，假设高于中位数2个标准差为异常值，则存在156平以上的异常值。
+-   发现2 房源面积分布的尾部在右侧，具有比正态分布更尖锐的峰，不满足正态分布。
+
+## 各区域房源数量的数值描述与图形
+
+```{r}
+property_region <- group_by(df, property_region) %>% filter(n() > 50)
+ggplot(property_region, aes(x = property_region)) + geom_bar()
+```
+
+发现：
+
+-   发现 白沙洲区域的房源最多，其次是盘龙城、四新、光谷东。
+
+## 探索问题1
+
+```{r}
+price00 <- summarise(property_region, price00 = mean(price_sqm, na.rm = TRUE))
+arrange(price00, desc(price00))
+threshold04 <- median(price00$price00)+2*sd(price00$price00)
+threshold04
+near_subway <- group_by(df, near_subway)
+price01 <- summarise(near_subway, price01 = mean(price_sqm, na.rm = TRUE))
+ggplot(data = price01, mapping = aes(x = near_subway, y = price01))+geom_point()
+price02 <- summarise(near_subway, price02 = mean(price_ttl, na.rm = TRUE))
+ggplot(data = price02, mapping = aes(x = near_subway, y = price02))+geom_point()
+```
+
+发现：
+
+-   发现1 剔除掉错误数据（如"VR看装修"）后，中北路、水果湖、黄埔永清、三阳、南湖沃尔玛、虎泉杨家湾、CBD西北湖、楚河汉街、关山大道区域的房源总价最高，基本集中在武昌区、江汉区、洪山区等中心城区，与武汉市热门商圈地段相符。假设高于中位数2个标准差为异常值，则中北路、水果湖单价为异常值，房源价格偏高。
+-   发现2 剔除掉错误数据（如"VR看装修""近地看""珞狮南""太子湖1号"）后，标注"近地铁"的房源单价为16624元，总价为169.64万元，均高于未标注"近地铁"的房源单价13558元，以及总价140.86万元，说明交通便利程度对房价有影响，近地铁的房源可能有更高的价格。
+
+## 探索问题2
+
+```{r}
+bedrooms <- group_by(df, bedrooms)
+area01 <- summarise(bedrooms, area01 = mean(building_area, na.rm = TRUE))
+ggplot(data = area01) +geom_point(mapping = aes(x = bedrooms, y = area01))
+price03 <- summarise(bedrooms, price03 = mean(price_sqm, na.rm = TRUE))
+ggplot(data = price03) +geom_point(mapping = aes(x = bedrooms, y = price03))
+price04 <- summarise(bedrooms, price04 = mean(price_ttl, na.rm = TRUE))
+ggplot(data = price04) +geom_point(mapping = aes(x = bedrooms, y = price04))
+```
+
+发现：
+
+-   发现1 随着房间数的增加，房源的面积也越大，二者正相关。
+-   发现2 随着房间数的增加，房源的单价和总价均持续增加，在5室时达到最高，此后开始回落，说明房间数越多，价格越高。
+
+## 探索问题3
+
+```{r}
+decoration <- group_by(df, decoration)
+price05 <- summarise(decoration, price05 = mean(price_sqm, na.rm = TRUE))
+ggplot(data = price05, mapping = aes(x = decoration, y = price05))+geom_point()
+price06 <- summarise(decoration, price06 = mean(price_ttl, na.rm = TRUE))
+ggplot(data = price06, mapping = aes(x = decoration, y = price06))+geom_point()
+property_height <- group_by(df, property_height)
+price07 <- summarise(property_height, price07 = mean(price_sqm, na.rm = TRUE))
+ggplot(data = price07, mapping = aes(x = property_height, y = price07))+geom_point()
+price08 <- summarise(property_height, price08 = mean(price_ttl, na.rm = TRUE))
+ggplot(data = price08, mapping = aes(x = property_height, y = price08))+geom_point()
+```
+
+发现：
+
+-   发现1 房源的装修状况对房价有一定的影响，精装房源的挂牌总价和单价均高于简装和毛坯房，精装房平均总价高于简装房近30万，精装房平均单价高于简装和毛坯房超过2000元，差距不小，说明卖家对房屋的前期投入也同样体现在了价格上，精装房方便买家拎包入住，因此普遍有更高的价格。但毛坯房单价虽略低于简装房，总价却高于简装房，与精装房总价差距较小，可能是因为毛坯房相比较简装房有更大的装修自由度，让买家可以将房屋装修成心仪的样子，同时毛坯房可能意味着建筑年代较新，所以卖家还没来得及装修，至少是从未住过人，这也在一定程度上满足了一些买家的心理。
+-   发现2 房屋在所在楼栋所处位置对房价也有一定的影响，总体差距不大。如果房源属于中楼层，那么总价与单价都处于相对较低的位置。高楼层平均总价在160万以内，高于中楼层平均总价近10万元，价格更高基本符合开发商对一手房的定价，也就是卖方购房的成本更高，高楼层的采光、隔音效果都更优于其他楼层，导致高楼层的房价也较高。低楼层的高价格可能更多源于上下楼梯便利度的优势，或是受异常值如别墅等超高价格的影响。
+
+------------------------------------------------------------------------
+
+# 发现总结
+
+根据武汉市链家二手房3000套房源信息，可以初步发现，武汉市挂牌二手房房源单价均价主要集中在在14000-15000元居多，总价在140万-150万元居多，面积在100平居多，户型多为两室一厅或三室两厅，精装房源为主，高、中、低楼层都有，板楼多，大多数近地铁，能够随时看房或VR看装修。 房源地段、户型、楼层、交通便利程度均在不同程度上影响房源价格。 存在一些异常值，如中北路、水果湖的房源，以及面积大、房间多的高端别墅或面积小的车库，使得房源差异化大。
